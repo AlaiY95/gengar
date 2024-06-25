@@ -1,1 +1,4 @@
+cargo.lock
 /target
+.env
+/node_modules
