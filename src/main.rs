@@ -1,42 +1,55 @@
 use dotenv::dotenv;
-use ethers::providers::{Provider, Ws};
 use tokio;
 
+use alloy_network::AnyNetwork;
+use alloy_provider::{Provider, ProviderBuilder, WsConnect};
+use log::info;
+use std::error::Error;
+use std::sync::Arc;
+use tokio::sync::broadcast::{self, Sender};
+use tokio::task::JoinSet;
+
 use gengar::common::constants::Env;
+use gengar::common::streams::Event;
+use gengar::common::utils::setup_logger;
+use gengar::strategies::strategy::strategy;
 
-#[tokio::main]
-async fn main() -> Result<()> {
+// #[tokio::main]
+#[tokio::main(flavor = "current_thread")]
+// async fn main() -> Result<()> {
+async fn main() -> Result<(), Box<dyn Error>> {
     dotenv::dotenv().ok();
-
-    setup_logger()?;
-
-    // info!("Starting Gengar");
+    setup_logger().unwrap();
     println!("Starting Gengar");
-    let ws = Ws::connect(config.wss_url.clone()).await?;
-    let provider = Arc::new(Provider::new(ws));
+
+    let env = Env::new();
+
+    let ws_connect = WsConnect {
+        url: env.wss_url.clone(),
+        auth: None,
+    };
+
+    info!("WebSocket connection established");
+
+    let provider = ProviderBuilder::new()
+        .network::<AnyNetwork>()
+        .with_recommended_fillers()
+        .on_ws(ws_connect)
+        .await?;
+
+    info!("Provider initialized");
+
+    let provider = Arc::new(provider);
 
     let (event_sender, _): (Sender<Event>, _) = broadcast::channel(512);
 
     let mut set = JoinSet::new();
 
-    set.spawn(stream_new_blocks(provider.clone(), event_sender.clone()));
-
-    set.spawn(handle_block_events(provider.clone(), event_sender.clone()));
+    set.spawn(strategy(provider.clone(), event_sender.clone()));
 
     while let Some(res) = set.join_next().await {
         info!("{:?}", res);
     }
 
-    let https_url = std::env::var("HTTPS_URL").expect("HTTPS_URL environment variable not found");
-
-    println!("HTTPS_URL {}", https_url);
-
-    Ok(())
-}
-
-async fn handle_block_events(
-    provider: Arc<Provider<Ws>>,
-    event_sender: Sender<Event>,
-) -> Result<()> {
     Ok(())
 }
