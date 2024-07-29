@@ -8,8 +8,8 @@ pub fn get_env(key: &str) -> String {
 pub struct Env {
     pub https_url: String,
     pub wss_url: String,
-    pub private_key: String,
-    pub debug: bool,
+    // pub private_key: String,
+    // pub debug: bool,
 }
 
 impl Env {
@@ -17,8 +17,8 @@ impl Env {
         Env {
             https_url: get_env("HTTPS_URL"),
             wss_url: get_env("WSS_URL"),
-            private_key: get_env("PRIVATE_KEY"),
-            debug: get_env("DEBUG").parse::<bool>().unwrap(),
+            // private_key: get_env("PRIVATE_KEY"),
+            // debug: get_env("DEBUG").parse::<bool>().unwrap(),
         }
     }
 }

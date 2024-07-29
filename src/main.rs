@@ -3,7 +3,7 @@ use tokio;
 
 use alloy_network::AnyNetwork;
 use alloy_provider::{Provider, ProviderBuilder, WsConnect};
-use log::info;
+use log::{debug, error, info};
 use std::error::Error;
 use std::sync::Arc;
 use tokio::sync::broadcast::{self, Sender};
@@ -15,7 +15,7 @@ use gengar::common::utils::setup_logger;
 use gengar::strategies::strategy::strategy;
 
 // #[tokio::main]
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main]
 // async fn main() -> Result<()> {
 async fn main() -> Result<(), Box<dyn Error>> {
     dotenv::dotenv().ok();
@@ -45,7 +45,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let mut set = JoinSet::new();
 
-    set.spawn(strategy(provider.clone(), event_sender.clone()));
+    set.spawn(async move {
+        match strategy(provider.clone(), event_sender.clone()).await {
+            Ok(()) => info!("Sandwich strategy completed successfully"),
+            Err(e) => error!("Sandwich strategy error: {:?}", e),
+        }
+    });
 
     while let Some(res) = set.join_next().await {
         info!("{:?}", res);

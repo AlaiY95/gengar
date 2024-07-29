@@ -118,6 +118,8 @@ async fn load_protocol_pools(
 
     let (mut writer, mut pools, mut max_id) = create_or_open_csv_file(cache_file)?;
 
+    let last_processed_block = pools.last().map_or(0, |pool| pool.block_number);
+
     let from_block = pools
         .last()
         .map_or(from_block, |pool| pool.block_number + 1);
@@ -146,9 +148,11 @@ async fn load_protocol_pools(
         {
             Ok(mut new_pools) => {
                 for pool in &mut new_pools {
-                    max_id += 1;
-                    pool.id = max_id;
-                    writer.serialize(pool)?;
+                    if pool.block_number > last_processed_block {
+                        max_id += 1;
+                        pool.id = max_id;
+                        writer.serialize(pool)?;
+                    }
                 }
 
                 let new_pool_count = new_pools.len();

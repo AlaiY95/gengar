@@ -3,3 +3,5 @@ cargo.lock
 .env
 /node_modules
 /cache
+/data/bundles/
+output.log

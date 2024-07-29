@@ -1,5 +1,8 @@
 #[allow(unused_imports)]
 use alloy_rpc_types_eth::{TransactionInput, TransactionRequest};
+use csv::ReaderBuilder;
+use csv::Writer;
+use std::error::Error;
 
 use alloy::providers::{Provider, ProviderBuilder, WsConnect};
 use alloy::pubsub::PubSubFrontend;
@@ -14,7 +17,7 @@ use super::generic_pool::Pool;
 use ethers::abi::{parse_abi, ParamType};
 use ethers::prelude::*;
 use indicatif::{ProgressBar, ProgressStyle};
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use std::collections::HashMap;
 use std::fs::File;
 use std::hash::Hash;
@@ -102,9 +105,10 @@ pub async fn cleanup_invalid_pools(
         })
     });
 }
+
 pub fn create_or_open_csv_file(
     file_path: &Path,
-) -> Result<(csv::Writer<File>, Vec<Pool>, i64), Box<dyn std::error::Error>> {
+) -> Result<(Writer<File>, Vec<Pool>, i64), Box<dyn Error>> {
     let file_exists = file_path.exists();
     let file = OpenOptions::new()
         .write(true)
@@ -117,9 +121,7 @@ pub fn create_or_open_csv_file(
     let mut max_id = -1;
 
     if file_exists {
-        let mut reader = csv::ReaderBuilder::new()
-            .has_headers(true)
-            .from_reader(file);
+        let mut reader = ReaderBuilder::new().has_headers(true).from_reader(file);
 
         for (index, row) in reader.records().enumerate() {
             match row {
@@ -153,6 +155,8 @@ pub fn create_or_open_csv_file(
             }
         }
     } else {
+        // If the file doesn't exist, write the header
+        debug!("Writing headers");
         writer.write_record(&[
             "id",
             "address",

@@ -9,8 +9,8 @@ use ethers_core::rand::Rng;
 use fern::colors::{Color, ColoredLevelConfig};
 use log::LevelFilter;
 use revm::primitives::{Address, SpecId, B256, U256 as rU256};
-
-pub fn setup_logger() -> Result<()> {
+use std::env;
+pub fn setup_logger() -> Result<(), fern::InitError> {
     // Configure colors for log levels
     let colors = ColoredLevelConfig {
         trace: Color::Cyan,
@@ -21,9 +21,11 @@ pub fn setup_logger() -> Result<()> {
         ..ColoredLevelConfig::new()
     };
 
-    // Create a closure that will filter log messages
-    // let logging_filter = |metadata: &log::Metadata| metadata.level() <= log::Level::Error;
-    let logging_filter = |metadata: &log::Metadata| metadata.level() <= log::Level::Info;
+    // Read RUST_LOG environment variable, default to "info" if not set
+    let log_level = match env::var("RUST_LOG") {
+        Ok(level) => level.parse::<LevelFilter>().unwrap_or(LevelFilter::Info),
+        Err(_) => LevelFilter::Info,
+    };
 
     let console_dispatch = fern::Dispatch::new()
         .format(move |out, message, record| {
@@ -35,9 +37,10 @@ pub fn setup_logger() -> Result<()> {
             ))
         })
         .chain(std::io::stdout())
-        // .level(log::LevelFilter::Error)
-        .level(log::LevelFilter::Info)
-        .level_for("gengar", LevelFilter::Info);
+        .level(log_level)
+        // Add these lines to filter out specific modules
+        .level_for("ethers", LevelFilter::Warn)
+        .level_for("jsonrpsee", LevelFilter::Warn);
 
     let file_dispatch = fern::Dispatch::new()
         .format(|out, message, record| {
@@ -48,7 +51,10 @@ pub fn setup_logger() -> Result<()> {
                 message
             ))
         })
-        .filter(logging_filter)
+        .level(log_level)
+        // Add these lines here too if you want to filter file logs as well
+        .level_for("ethers", LevelFilter::Warn)
+        .level_for("jsonrpsee", LevelFilter::Warn)
         .chain(fern::log_file("output.log")?);
 
     fern::Dispatch::new()
