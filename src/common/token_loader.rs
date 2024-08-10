@@ -1,42 +1,29 @@
-use alloy_primitives::Address as AlloyAddress;
 use anyhow::{Context, Result};
 use csv::{ReaderBuilder, WriterBuilder};
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs::File;
-use std::io::Write;
 use std::io::{BufReader, BufWriter};
 
 use crate::common::constants::Env;
-use alloy_rpc_types_eth::{
-    Block, BlockId, BlockNumberOrTag, BlockTransactionHashes, BlockTransactionsKind, Filter,
-};
-use ethers::providers::spoof::State;
-use eyre::anyhow;
-use lazy_static::lazy_static;
+
 use once_cell::sync::Lazy;
 use tokio::sync::Mutex;
 
-use csv::StringRecord;
-use ethers::abi::parse_abi;
-use ethers::prelude::BaseContract;
 use ethers::{
-    abi::{decode, encode, AbiDecode, ParamType},
     contract::abigen,
-    providers::{call_raw::RawCall, Middleware, Provider, Ws},
+    providers::{Provider, Ws},
     types::{BlockId as EthersBlockId, BlockNumber as EthersBlockNumber, H160},
 };
 
 use indicatif::MultiProgress;
 
-use revm::primitives::{uint, Bytes as rBytes, FixedBytes, HandlerCfg, Log, B256, U256 as rU256};
 use std::{collections::HashMap, fs::OpenOptions, path::Path, str::FromStr, sync::Arc};
 
 // use crate::common::pools::Pool;
-use crate::pools::generic_pool::{DexVariant, Pool};
+use crate::pools::generic_pool::Pool;
 
-use crate::common::utils::create_new_wallet;
 use crate::common::utils::{b160_to_h160, h160_to_b160};
 use futures::StreamExt;
 use tokio::time::{Duration, Instant};
