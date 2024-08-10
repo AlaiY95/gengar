@@ -1,7 +1,5 @@
 cargo.lock
 /target
 .env
-/node_modules
 /cache
-/data/bundles/
 output.log

@@ -30,7 +30,7 @@ pub async fn load_all_pools(
     wss_url: String,
     from_block: u64,
     chunk: u64,
-) -> Result<(Vec<Pool>, u64), Box<dyn std::error::Error>> {
+) -> Result<(Vec<Pool>, u64, u64, u64), Box<dyn std::error::Error>> {
     info!("Executing pools.load_all_pools()");
     info!(
         "Initial parameters - from_block: {}, chunk: {}",
@@ -87,10 +87,20 @@ pub async fn load_all_pools(
     final_all_pools.sort_by_key(|p: &Pool| p.block_number);
 
     let current_block = provider.get_block_number().await?;
-    // info!("Number of unique pool addresses: {}", final_all_pools.len());
-    // info!("Final prev_pool_id: {}", final_prev_pool_id);
 
-    Ok((final_all_pools, current_block.try_into().unwrap()))
+    let earliest_new_block = final_all_pools
+        .first()
+        .map_or(from_block, |p| p.block_number);
+    let latest_loaded_block = final_all_pools
+        .last()
+        .map_or(current_block, |p| p.block_number);
+
+    Ok((
+        final_all_pools,
+        earliest_new_block,
+        latest_loaded_block,
+        current_block.try_into().unwrap(),
+    ))
 }
 async fn load_protocol_pools(
     protocol_info: &(dyn ProtocolLoader + Send + Sync),
@@ -200,6 +210,7 @@ async fn load_protocol_pools(
         ),
     );
 
+    // Update shared state
     {
         let mut all_pools_guard = all_pools.lock().await;
         all_pools_guard.push(pools.clone());

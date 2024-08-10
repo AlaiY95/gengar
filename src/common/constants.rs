@@ -1,3 +1,5 @@
+use ethers::{prelude::Lazy, types::Bytes};
+
 pub static PROJECT_NAME: &str = "gengar";
 
 pub fn get_env(key: &str) -> String {

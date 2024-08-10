@@ -1,5 +1,7 @@
 use alloy::primitives::{Address as AlloyAddress, Bytes as rBytes, FixedBytes as rFixedBytes};
 use anyhow::Result;
+use ethers::core::rand::thread_rng;
+use ethers::signers::{LocalWallet, Signer};
 use ethers::types::{
     transaction::eip2930::{AccessList as eAccessList, AccessListItem},
     Bytes as eBytes, NameOrAddress, H160 as EthersH160, I256, U256,
@@ -122,4 +124,15 @@ pub fn calculate_next_block_base_fee(
 
     let seed = rand::thread_rng().gen_range(0..9);
     new_base_fee + seed as u128
+}
+
+pub fn create_new_wallet() -> (LocalWallet, EthersH160) {
+    let wallet = LocalWallet::new(&mut thread_rng());
+    let address = wallet.address();
+    (wallet, address)
+}
+
+#[inline]
+pub fn h160_to_b160(h: EthersH160) -> revm::primitives::Address {
+    revm::primitives::Address::from_slice(h.as_bytes())
 }
