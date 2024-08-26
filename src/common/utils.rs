@@ -4,14 +4,22 @@ use ethers::core::rand::thread_rng;
 use ethers::signers::{LocalWallet, Signer};
 use ethers::types::{
     transaction::eip2930::{AccessList as eAccessList, AccessListItem},
-    Bytes as eBytes, NameOrAddress, H160 as EthersH160, I256, U256,
+    Bytes as eBytes, NameOrAddress, H160 as EthersH160, H160, H256, I256, U256,
 };
 use ethers_core::rand;
 use ethers_core::rand::Rng;
 use fern::colors::{Color, ColoredLevelConfig};
 use log::LevelFilter;
 use revm::primitives::{Address, SpecId, B256, U256 as rU256};
+use serde::{Deserialize, Serialize};
 use std::env;
+use std::str::FromStr;
+
+use crate::common::constants::{
+    USDC_ADDRESS, USDC_BALANCE_SLOT, USDC_DECIMALS, USDT_ADDRESS, USDT_BALANCE_SLOT, USDT_DECIMALS,
+    WETH_ADDRESS, WETH_BALANCE_SLOT, WETH_DECIMALS,
+};
+
 pub fn setup_logger() -> Result<(), fern::InitError> {
     // Configure colors for log levels
     let colors = ColoredLevelConfig {
@@ -135,4 +143,130 @@ pub fn create_new_wallet() -> (LocalWallet, EthersH160) {
 #[inline]
 pub fn h160_to_b160(h: EthersH160) -> revm::primitives::Address {
     revm::primitives::Address::from_slice(h.as_bytes())
+}
+
+pub fn alloy_uint_to_ethers_u256(input: alloy::primitives::Uint<256, 4>) -> ethers::types::U256 {
+    let bytes: [u8; 32] = input.to_be_bytes();
+    ethers::types::U256::from_big_endian(&bytes)
+}
+
+pub fn b256_to_h256(b: B256) -> H256 {
+    H256::from_slice(b.as_slice())
+}
+
+pub fn determine_main_currency(token_in: H160, token_out: H160) -> (MainCurrency, u8, i32) {
+    if let Some((main_token, _)) = return_main_and_target_currency(token_in, token_out) {
+        let main_currency = MainCurrency::new(main_token);
+        (
+            main_currency.clone(),
+            main_currency.decimals(),
+            main_currency.balance_slot(),
+        )
+    } else {
+        // If neither token is a main currency, default to treating token_in as the "main" currency
+        (
+            MainCurrency::Default,
+            MainCurrency::Default.decimals(),
+            MainCurrency::Default.balance_slot(),
+        )
+    }
+}
+
+pub fn is_weth(token_address: H160) -> bool {
+    token_address == to_h160(WETH_ADDRESS)
+}
+pub fn return_main_and_target_currency(token0: H160, token1: H160) -> Option<(H160, H160)> {
+    let token0_supported = is_main_currency(token0);
+    let token1_supported = is_main_currency(token1);
+
+    if !token0_supported && !token1_supported {
+        return None;
+    }
+
+    if token0_supported && token1_supported {
+        let mc0 = MainCurrency::new(token0);
+        let mc1 = MainCurrency::new(token1);
+
+        let token0_weight = mc0.weight();
+        let token1_weight = mc1.weight();
+
+        if token0_weight > token1_weight {
+            return Some((token0, token1));
+        } else {
+            return Some((token1, token0));
+        }
+    }
+
+    if token0_supported {
+        return Some((token0, token1));
+    } else {
+        return Some((token1, token0));
+    }
+}
+
+pub fn to_h160(str_address: &'static str) -> H160 {
+    H160::from_str(str_address).unwrap()
+}
+
+pub fn is_main_currency(token_address: H160) -> bool {
+    let main_currencies = vec![
+        to_h160(WETH_ADDRESS),
+        to_h160(USDT_ADDRESS),
+        to_h160(USDC_ADDRESS),
+    ];
+    main_currencies.contains(&token_address)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+
+pub enum MainCurrency {
+    WETH_ADDRESS,
+    USDT_ADDRESS,
+    USDC_ADDRESS,
+    Default, // Pairs that aren't WETH/Stable pairs. Default to WETH for now
+}
+
+impl MainCurrency {
+    pub fn new(address: H160) -> Self {
+        if address == to_h160(WETH_ADDRESS) {
+            MainCurrency::WETH_ADDRESS
+        } else if address == to_h160(USDT_ADDRESS) {
+            MainCurrency::USDT_ADDRESS
+        } else if address == to_h160(USDC_ADDRESS) {
+            MainCurrency::USDC_ADDRESS
+        } else {
+            MainCurrency::Default
+        }
+    }
+
+    pub fn decimals(&self) -> u8 {
+        match self {
+            MainCurrency::WETH_ADDRESS => WETH_DECIMALS,
+            MainCurrency::USDT_ADDRESS => USDC_DECIMALS,
+            MainCurrency::USDC_ADDRESS => USDC_DECIMALS,
+            MainCurrency::Default => WETH_DECIMALS,
+        }
+    }
+
+    pub fn balance_slot(&self) -> i32 {
+        match self {
+            MainCurrency::WETH_ADDRESS => WETH_BALANCE_SLOT,
+            MainCurrency::USDT_ADDRESS => USDT_BALANCE_SLOT,
+            MainCurrency::USDC_ADDRESS => USDC_BALANCE_SLOT,
+            MainCurrency::Default => WETH_BALANCE_SLOT,
+        }
+    }
+
+    /*
+    We score the currencies by importance
+    WETH has the highest importance, and USDT, USDC in the following order
+    */
+    pub fn weight(&self) -> u8 {
+        match self {
+            MainCurrency::WETH_ADDRESS => 3,
+            MainCurrency::USDT_ADDRESS => 2,
+            MainCurrency::USDC_ADDRESS => 1,
+            MainCurrency::Default => 3, // default is WETH
+        }
+    }
 }

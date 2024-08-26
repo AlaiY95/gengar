@@ -2,6 +2,7 @@
 use alloy_rpc_types_eth::{TransactionInput, TransactionRequest};
 use csv::ReaderBuilder;
 use csv::Writer;
+use log4rs::encode::writer;
 use std::error::Error;
 
 use alloy::providers::{Provider, ProviderBuilder, WsConnect};
@@ -21,12 +22,7 @@ use log::{debug, error, info, warn};
 use std::collections::HashMap;
 use std::fs::File;
 use std::hash::Hash;
-use std::{
-    fs::{create_dir_all, OpenOptions},
-    path::Path,
-    str::FromStr,
-    sync::Arc,
-};
+use std::{fs::OpenOptions, path::Path, sync::Arc};
 
 pub fn calculate_block_range(from_block: u64, to_block: u64, chunk: u64) -> Vec<(u64, u64)> {
     let mut block_range = Vec::new();
@@ -121,9 +117,11 @@ pub fn create_or_open_csv_file(
     let mut max_id = -1;
 
     if file_exists {
-        let mut reader = ReaderBuilder::new().has_headers(true).from_reader(file);
+        let reader = ReaderBuilder::new()
+            .has_headers(true)
+            .from_path(file_path)?;
 
-        for (index, row) in reader.records().enumerate() {
+        for (index, row) in reader.into_records().enumerate() {
             match row {
                 Ok(record) => {
                     let pool_result = std::panic::catch_unwind(|| Pool::from(record.clone()));
@@ -154,8 +152,13 @@ pub fn create_or_open_csv_file(
                 }
             }
         }
-    } else {
-        // If the file doesn't exist, write the header
+    }
+
+    let mut writer = csv::WriterBuilder::new()
+        .has_headers(!file_exists)
+        .from_writer(file);
+
+    if !file_exists {
         debug!("Writing headers");
         writer.write_record(&[
             "id",

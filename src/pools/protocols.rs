@@ -24,7 +24,7 @@ pub struct MarketInfo {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ProtocolData {
     pub name: String,
-    pub version: DexVariant,
+    pub version: String,
 }
 
 // #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Copy)]

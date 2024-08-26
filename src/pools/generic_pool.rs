@@ -1,10 +1,10 @@
 use alloy::dyn_abi::{FunctionExt, JsonAbiExt};
-use alloy::providers::{Provider, WsConnect};
+use alloy::providers::Provider;
 use alloy::pubsub::PubSubFrontend;
 use alloy_dyn_abi::DynSolValue;
 use alloy_rpc_types_eth::{TransactionInput, TransactionRequest};
 use alloy_serde::WithOtherFields;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 // use alloy_contract::{AbiItem, CallData, ContractError};
 use crate::common::utils::b160_to_h160;
 use crate::pools::protocols::ProtocolData;
@@ -18,35 +18,38 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::Arc;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub enum DexVariant {
     UniswapV2,
     UniswapV3,
     SushiswapV2,
     SushiswapV3,
-    // Add more variants here as you add support for more DEXes
+    Unknown(String), // Add more variants here as you add support for more DEXes
 }
 
 impl DexVariant {
-    fn get_protocol_data(&self) -> ProtocolData {
-        match self {
+    pub fn get_protocol_data(&self) -> ProtocolData {
+        match &self {
             DexVariant::UniswapV2 => ProtocolData {
                 name: "Uniswap".to_string(),
-                version: DexVariant::UniswapV2,
+                version: "V2".to_string(),
             },
             DexVariant::UniswapV3 => ProtocolData {
                 name: "Uniswap".to_string(),
-                version: DexVariant::UniswapV3,
+                version: "V3".to_string(),
             },
             DexVariant::SushiswapV2 => ProtocolData {
-                name: "Sushiswap".to_string(),
-                version: DexVariant::SushiswapV2,
+                name: "SushiSwap".to_string(),
+                version: "V2".to_string(),
             },
             DexVariant::SushiswapV3 => ProtocolData {
-                name: "Sushiswap".to_string(),
-                version: DexVariant::SushiswapV3,
+                name: "SushiSwap".to_string(),
+                version: "V3".to_string(),
             },
-            // Add other variants as needed
+            DexVariant::Unknown(address) => ProtocolData {
+                name: "Unknown".to_string(),
+                version: format!("Unknown({})", address),
+            },
         }
     }
     pub fn num(&self) -> u8 {
@@ -55,12 +58,12 @@ impl DexVariant {
             DexVariant::UniswapV3 => 3,
             DexVariant::SushiswapV2 => 2,
             DexVariant::SushiswapV3 => 3,
-            // Add more cases here as you add more variants
+            DexVariant::Unknown(_) => 0,
         }
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub struct Pool {
     pub id: i64,
     pub address: Address,
@@ -148,24 +151,27 @@ impl Pool {
     }
 
     pub fn get_protocol_data(&self) -> ProtocolData {
-        match self.version {
+        match &self.version {
             DexVariant::UniswapV2 => ProtocolData {
                 name: "Uniswap".to_string(),
-                version: DexVariant::UniswapV2,
+                version: "V2".to_string(),
             },
             DexVariant::UniswapV3 => ProtocolData {
                 name: "Uniswap".to_string(),
-                version: DexVariant::UniswapV3,
+                version: "V3".to_string(),
             },
             DexVariant::SushiswapV2 => ProtocolData {
                 name: "SushiSwap".to_string(),
-                version: DexVariant::SushiswapV2,
+                version: "V2".to_string(),
             },
             DexVariant::SushiswapV3 => ProtocolData {
                 name: "SushiSwap".to_string(),
-                version: DexVariant::SushiswapV3,
+                version: "V3".to_string(),
             },
-            // Add other variants as needed
+            DexVariant::Unknown(address) => ProtocolData {
+                name: "Unknown".to_string(),
+                version: format!("Unknown({})", address),
+            },
         }
     }
 
