@@ -15,6 +15,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::broadcast::Sender;
 use tokio::sync::Mutex;
+use tokio::sync::Semaphore;
 use tokio::time::Instant;
 
 use revm::primitives::B256;
@@ -166,6 +167,10 @@ where
 
     let processed_txs: Arc<DashSet<B256>> = Arc::new(DashSet::new());
 
+    let semaphore_permits = 1;
+
+    let semaphore = Arc::new(Semaphore::new(semaphore_permits));
+
     info!("Starting main loop");
 
     loop {
@@ -202,6 +207,9 @@ where
 
                         processed_txs.insert(tx_hash);
 
+
+                        let semaphore_clone = Arc::clone(&semaphore);
+
                         let provider_clone = Arc::clone(&provider);
                         let ethers_provider_clone = Arc::clone(&ethers_provider);
                         let pools_map_clone = Arc::clone(&pools_map);
@@ -214,6 +222,8 @@ where
 
 
                         tokio::spawn(async move {
+
+                            let _permit = semaphore_clone.acquire().await.unwrap();
 
                             process_pending_transaction(
                                 wss_url_clone,
