@@ -1,12 +1,19 @@
-use crate::common::streams::{NewBlock, NewPendingTx};
-use crate::simulation::tracing::debug_trace_call_with_retry;
+use anyhow::Error;
+use anyhow::Result as AnyhowResult;
+
+use log::{info, warn};
+use std::sync::Arc;
+
 use alloy_rpc_types_eth::Transaction as AlloyTransaction;
 use ethers::core::types::{CallFrame, CallLogFrame};
 use ethers::providers::{Provider, Ws};
 use ethers::types::{H160, H256, U256};
-// use ethers::utils::hex;
-// use lazy_static::lazy_static;
+use log::{debug, error};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
 use rust_decimal::prelude::FromPrimitive;
+use rust_decimal::Decimal;
 use std::sync::atomic::AtomicU64;
 // use std::ops::Mul;
 use std::str::FromStr;
@@ -18,30 +25,19 @@ use ethers::abi::ParamType;
 use crate::common::utils::{
     alloy_uint_to_ethers_u256, b160_to_h160, b256_to_h256, return_main_and_target_currency,
 };
-// use revm::primitives::{Address, Bytes, TxKind, U256 as rU256};
-
-use rust_decimal::Decimal;
-// use serde_json::to_string_pretty;
-
-use crate::pools::generic_pool::Pool;
-// use crate::pools::protocols::{MarketInfo, ProtocolData};
 use crate::pools::DexVariant;
-// use crate::simulation::tracing::debug_trace_call;
-use anyhow::Error;
-use anyhow::Result as AnyhowResult;
 
-use log::{info, warn};
-use std::sync::Arc;
+use crate::common::streams::{NewBlock, NewPendingTx};
+use crate::pools::generic_pool::Pool;
+use crate::simulation::optimizor::SwapHop;
+use crate::simulation::tracing::debug_trace_call_with_retry;
+
 // use mongodb::{options::ClientOptions, Client, Collection};
 use crate::common::constants::{
     USDC_ADDRESS, USDC_BALANCE_SLOT, USDC_DECIMALS, USDT_ADDRESS, USDT_BALANCE_SLOT, USDT_DECIMALS,
     WETH_ADDRESS, WETH_BALANCE_SLOT, WETH_DECIMALS,
 };
 use crate::common::token_loader::Token;
-
-use log::{debug, error};
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 use crate::simulation::types::*;
 
@@ -69,8 +65,8 @@ pub struct SwapInfo {
     pub main_currency_balance_slot: Option<u64>,
     // price_impact: Decimal,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct SwapPath {
     pub path: MatchedSwapPath,
     pub original_tx: AlloyTransaction,
@@ -94,7 +90,6 @@ pub struct MatchedSwapPath {
     pub output_token: Token,
     // pub total_price_impact: Decimal,
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct MatchedSwapHop {
     pub hop: SwapHop,
@@ -106,7 +101,7 @@ pub struct MatchedSwapHop {
 Detected Routers
 0x881d40237659c251811cec9c364ef91dc08d300c - Metamask Swap Router
 0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad - Uniswap router V2 or V3 hmmmmm
-0xdef1c0ded9bec7f1a1670819833240f027b25eff - WEIRD
+0xdef1c0ded9bec7f1a1670819833240f027b25eff
 0x2ec705d306b51e486b1bc0d6ebee708e0661add1
 0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad
 0x1111111254eeb25477b68fb85ed929f73a960582
@@ -581,60 +576,6 @@ fn match_swap_with_pools(
 
     Ok(Some(matched_swap_path))
 }
-
-// fn calculate_price_impact(
-//     amount_in: U256,
-//     amount_out: U256,
-//     reserve_in: U256,
-//     reserve_out: U256,
-//     fee: Decimal,
-// ) -> Decimal {
-//     // Check for zero reserves
-//     if reserve_in.is_zero() || reserve_out.is_zero() {
-//         warn!("Zero reserve detected in price impact calculation");
-//         return Decimal::ONE_HUNDRED; // 100% price impact
-//     }
-
-//     // Convert U256 to Decimal
-//     let amount_in_dec = u256_to_decimal(amount_in);
-//     let amount_out_dec = u256_to_decimal(amount_out);
-//     let reserve_in_dec = u256_to_decimal(reserve_in);
-//     let reserve_out_dec = u256_to_decimal(reserve_out);
-
-//     debug!("amount_in: {}", amount_in);
-//     debug!("amount_out: {}", amount_out);
-//     debug!("reserve_in: {}", reserve_in);
-//     debug!("reserve_out: {}", reserve_out);
-
-//     debug!("amount_in_dec: {}", amount_in_dec);
-//     debug!("amount_out_dec: {}", amount_out_dec);
-//     debug!("reserve_in_dec: {}", reserve_in_dec);
-//     debug!("reserve_out_dec: {}", reserve_out_dec);
-
-//     let amount_in_with_fee = amount_in_dec * (Decimal::ONE - fee);
-//     debug!("amount_in_with_fee: {}", amount_in_with_fee);
-
-//     let expected_out =
-//         (amount_in_with_fee * reserve_out_dec) / (reserve_in_dec + amount_in_with_fee);
-//     debug!("expected_out: {}", expected_out);
-
-//     if expected_out.is_zero() {
-//         warn!("Expected output is zero or very close to zero in price impact calculation");
-//         return Decimal::ONE_HUNDRED; // 100% price impact
-//     }
-
-//     // Calculate price impact
-//     let price_impact = amount_out_dec / expected_out - Decimal::ONE;
-
-//     debug!("price_impact: {}", price_impact);
-
-//     let price_impact_percentage = price_impact * Decimal::ONE_HUNDRED;
-
-//     let rounded_impact = price_impact_percentage.round_dp(4); // Round to 4 decimal places
-//     debug!("price_impact_percentage: {}", rounded_impact);
-
-//     price_impact_percentage
-// }
 
 fn u256_to_decimal(value: U256) -> Decimal {
     let (quotient, remainder) = value.div_mod(U256::from(10u64.pow(18)));

@@ -2,6 +2,7 @@ use alloy::primitives::{Address as AlloyAddress, Bytes as rBytes, FixedBytes as 
 use anyhow::Result;
 use ethers::core::rand::thread_rng;
 use ethers::signers::{LocalWallet, Signer};
+use ethers::types::BigEndianHash;
 use ethers::types::{
     transaction::eip2930::{AccessList as eAccessList, AccessListItem},
     Bytes as eBytes, NameOrAddress, H160 as EthersH160, H160, H256, I256, U256,
@@ -10,7 +11,9 @@ use ethers_core::rand;
 use ethers_core::rand::Rng;
 use fern::colors::{Color, ColoredLevelConfig};
 use log::LevelFilter;
+use revm::precompile::{PrecompileSpecId, Precompiles};
 use revm::primitives::{Address, SpecId, B256, U256 as rU256};
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::str::FromStr;
@@ -140,6 +143,16 @@ pub fn create_new_wallet() -> (LocalWallet, EthersH160) {
     (wallet, address)
 }
 
+pub fn ethers_u256_to_alloy_uint(input: ethers::types::U256) -> alloy::primitives::Uint<256, 4> {
+    let mut bytes = [0u8; 32];
+    input.to_big_endian(&mut bytes);
+    alloy::primitives::Uint::from_be_bytes(bytes)
+}
+
+pub fn fixed_bytes_to_h256(fixed: rFixedBytes<32>) -> H256 {
+    H256::from_slice(fixed.as_slice())
+}
+
 #[inline]
 pub fn h160_to_b160(h: EthersH160) -> revm::primitives::Address {
     revm::primitives::Address::from_slice(h.as_bytes())
@@ -204,8 +217,27 @@ pub fn return_main_and_target_currency(token0: H160, token1: H160) -> Option<(H1
     }
 }
 
+pub fn sub_u256_to_i256(a: U256, b: U256) -> I256 {
+    if a >= b {
+        let result = a - b;
+        I256::try_from(result).unwrap_or(I256::MAX)
+    } else {
+        let result = b - a;
+        let neg_result = I256::try_from(result).unwrap_or(I256::MIN);
+        -neg_result
+    }
+}
+
 pub fn to_h160(str_address: &'static str) -> H160 {
     H160::from_str(str_address).unwrap()
+}
+
+pub fn h256_to_b256(h: H256) -> B256 {
+    B256::from_slice(h.as_bytes())
+}
+
+pub fn u128_to_u256(value: u128) -> U256 {
+    U256::from(value)
 }
 
 pub fn is_main_currency(token_address: H160) -> bool {
@@ -269,4 +301,67 @@ impl MainCurrency {
             MainCurrency::Default => 3, // default is WETH
         }
     }
+}
+
+pub fn u256_to_eth(value: U256) -> Decimal {
+    // Convert U256 to a decimal string
+    let wei_value = Decimal::from_str(&value.to_string()).unwrap();
+
+    // Convert wei to ETH (1 ETH = 10^18 wei)
+    let eth_value = wei_value / Decimal::from(10u64.pow(18));
+
+    eth_value
+}
+
+pub fn access_list_to_ethers(access_list: Vec<(Address, Vec<rU256>)>) -> eAccessList {
+    eAccessList::from(
+        access_list
+            .into_iter()
+            .map(|(address, slots)| AccessListItem {
+                address: b160_to_h160(address),
+                storage_keys: slots
+                    .into_iter()
+                    .map(|y| H256::from_uint(&ru256_to_u256(y)))
+                    .collect(),
+            })
+            .collect::<Vec<AccessListItem>>(),
+    )
+}
+
+pub fn access_list_to_revm(access_list: eAccessList) -> Vec<(Address, Vec<rU256>)> {
+    access_list
+        .0
+        .into_iter()
+        .map(|x| {
+            (
+                h160_to_b160(x.address),
+                x.storage_keys
+                    .into_iter()
+                    .map(|y| u256_to_ru256(y.0.into()))
+                    .collect(),
+            )
+        })
+        .collect()
+}
+
+pub fn alloy_to_ethers_bytes(alloy_bytes: rBytes) -> eBytes {
+    eBytes::from(alloy_bytes.to_vec())
+}
+
+#[inline]
+pub fn u256_to_ru256(u: ethers::types::U256) -> revm::primitives::U256 {
+    let mut buffer = [0u8; 32];
+    u.to_little_endian(buffer.as_mut_slice());
+    revm::primitives::U256::from_le_bytes(buffer)
+}
+
+pub fn ethers_to_alloy_bytes(ethers_bytes: eBytes) -> rBytes {
+    rBytes::from(ethers_bytes.to_vec())
+}
+
+pub fn get_precompiles_for(spec_id: SpecId) -> impl IntoIterator<Item = Address> {
+    Precompiles::new(PrecompileSpecId::LATEST)
+        .addresses()
+        .into_iter()
+        .map(|addr| *addr)
 }

@@ -19,11 +19,9 @@ use std::{default::Default, sync::Arc};
 
 use crate::common::streams::{NewBlock, NewPendingTx};
 use crate::common::utils::b160_to_h160;
-// use crate::pools::protocols::{UniswapV2, UniswapV3};
 use crate::simulation::types::*;
 
 use std::cmp::max;
-// use std::convert::TryFrom;
 
 pub static V2_SWAP_EVENT_ID: &str = "0xd78ad95f";
 pub static V3_SWAP_EVENT_ID: &str = "0xc42079f9";
@@ -235,7 +233,7 @@ Example of Call Frame
 }
 */
 pub fn extract_logs(call_frame: &CallFrame, logs: &mut Vec<CallLogFrame>) {
-    // info!("Executing simulation.extract_logs()");
+    // info!("Executing extract_logs()");
 
     // Check if the call frame has logs
     if let Some(ref logs_vec) = call_frame.logs {

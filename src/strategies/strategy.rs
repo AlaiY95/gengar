@@ -1,4 +1,3 @@
-use crate::simulation::types::Sandwich;
 use alloy::providers::Provider as AlloyProvider;
 use alloy::pubsub::PubSubFrontend;
 use alloy_network::AnyNetwork;
@@ -6,7 +5,6 @@ use alloy_rpc_types_eth::{
     Block, BlockId, BlockNumberOrTag, BlockTransactionHashes, BlockTransactions,
     BlockTransactionsKind, Filter,
 };
-use bounded_vec_deque::BoundedVecDeque;
 use dashmap::DashSet;
 use ethers::providers::Provider as EthersProvider;
 use ethers::types::{H160, U256};
@@ -15,8 +13,8 @@ use log::{debug, error, info, warn};
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
+use tokio::sync::broadcast::Sender;
 use tokio::sync::Mutex;
-use tokio::time::Duration;
 use tokio::time::Instant;
 
 use revm::primitives::B256;
@@ -26,17 +24,16 @@ use ethers::signers::{LocalWallet, Signer};
 use crate::common::constants::Env;
 use crate::common::streams::NewPendingTx;
 use crate::common::streams::{Event, NewBlock};
-use crate::common::token_loader::load_tokens;
-use crate::common::token_loader::Token;
+use crate::common::token_loader::{load_tokens, Token};
 use crate::common::utils::calculate_next_block_base_fee;
-use crate::common::utils::{b160_to_h160, eth_to_wei};
+use crate::common::utils::{b160_to_h160, eth_to_wei, fixed_bytes_to_h256};
 use crate::pools::generic_pool::{DexVariant, Pool};
 use crate::pools::pool_filters::{filter_pools, PoolFilters};
 use crate::pools::pool_loader::load_all_pools;
+use crate::simulation::optimizor::generate_and_simulate_paths;
 use crate::simulation::types::PendingTxInfo;
+use crate::simulation::types::Sandwich;
 use crate::strategies::hop_extractor::detect_swaps;
-
-use tokio::sync::broadcast::Sender;
 
 pub async fn strategy<P>(
     provider: Arc<P>,
@@ -217,6 +214,7 @@ where
 
 
                         tokio::spawn(async move {
+
                             process_pending_transaction(
                                 wss_url_clone,
                                 pending_tx,
@@ -271,7 +269,7 @@ pub async fn process_pending_transaction<P>(
 {
     let start_time = Instant::now();
     let tx_hash = pending_tx.tx.hash;
-    // let tx_hash_str = format!("{:?}", tx_hash);
+    let tx_hash_str = format!("{:?}", tx_hash);
 
     info!("Processing pending tx: {:?}", tx_hash);
 
@@ -307,6 +305,65 @@ pub async fn process_pending_transaction<P>(
                 pending_tx: pending_tx.clone(),
                 swap_path: Some(swap_paths.clone()),
             };
+
+            // Add the pending transaction to our tracking
+            {
+                let mut pending_txs_guard = pending_txs.lock().await;
+                pending_txs_guard.insert(tx_hash, pending_tx_info.clone());
+            }
+
+            // Generate and simulate sandwich paths
+            let sandwich_gen_start = Instant::now();
+            let sandwich_result = generate_and_simulate_paths(
+                wss_url.clone(),
+                Arc::new(new_block.clone()),
+                fixed_bytes_to_h256(tx_hash),
+                swap_paths,
+                Arc::clone(pools_map),
+                tokens_map.clone(),
+                &pending_tx_info,
+            )
+            .await;
+
+            let sandwich_generation_time = sandwich_gen_start.elapsed();
+
+            match sandwich_result {
+                Ok(sandwiches_map) => {
+                    if !sandwiches_map.is_empty() {
+                        info!(
+                            "Sandwich path generated for tx_hash: {:?}, generation time: {:?}",
+                            tx_hash, sandwich_generation_time
+                        );
+
+                        // Add promising sandwiches
+                        {
+                            let mut promising_sandwiches_guard = promising_sandwiches.lock().await;
+                            promising_sandwiches_guard.extend(sandwiches_map.clone());
+                        }
+
+                        // Final check before sending bundle
+                        if !is_transaction_still_pending(provider.clone(), tx_hash).await {
+                            info!("Sending bundle for tx_hash: {:?}", tx_hash);
+
+                            // let detection_time = pending_tx_info.pending_tx.detected_at;
+                        } else {
+                            warn!(
+                                "Transaction confirmed before sending bundle. Tx Hash: {:?}",
+                                tx_hash
+                            );
+                        }
+                    } else {
+                        info!(
+                            "No profitable sandwiches found for tx {:?}, generation time: {:?}",
+                            tx_hash, sandwich_generation_time
+                        );
+                    }
+                }
+                Err(e) => error!(
+                    "Failed to generate and simulate sandwich paths for pending tx {:?}: {:?}",
+                    tx_hash, e
+                ),
+            }
         }
         Ok(None) => {
             debug!(
@@ -322,6 +379,7 @@ pub async fn process_pending_transaction<P>(
         }
     }
 
+    // Mark the transaction as processed
     processed_txs.insert(tx_hash);
 
     let total_processing_time = start_time.elapsed();
