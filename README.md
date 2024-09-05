@@ -44,6 +44,12 @@ cargo build
 ## Run the project:
 cargo run
 
+## Configuration
+You will need to add a node rpc (websocket) in the .env file. 
+Here is a public one you can use:
+https://merkle.io/free-eth-rpc
+
+
 
 ## Performance
 The system is optimized for high-throughput processing, capable of handling thousands of transactions per minute while maintaining sub-second latency. The binary search algorithm for blockchain operation optimization is designed to quickly converge on optimal solutions.
