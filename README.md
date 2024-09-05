@@ -1,7 +1,7 @@
 Blockchain Data Processor Project (Gengar)
-Overview
+##Overview
 Gengar is a high-performance blockchain data analysis system developed in Rust. It's designed for real-time transaction monitoring and advanced data processing, focusing on handling large volumes of blockchain data with minimal latency.
-Key Features
+##Key Features
 
 High-Performance Data Processing: Engineered to handle thousands of transactions per minute with sub-second latency.
 Real-Time Transaction Monitoring: Continuously monitors blockchain transactions for immediate analysis.
@@ -9,7 +9,7 @@ Advanced Pattern Recognition: Implements sophisticated algorithms for identifyin
 Optimized Decision Making: Utilizes a binary search algorithm to efficiently optimize various blockchain-related operations.
 Comprehensive Metrics and Monitoring: Includes a robust system for performance analysis and continuous optimization.
 
-Technical Details
+##Technical Details
 
 Language: Rust
 Main Components:
@@ -33,16 +33,16 @@ Utilizes concurrent simulations to speed up the search process
 
 This approach allows for rapid optimization of blockchain operations while minimizing computational overhead.
 Getting Started
-(Here, you would include instructions on how to set up and run the project. For example:)
+
 
 Clone the repository:
-Copygit clone https://github.com/AlaiY95/gengar.git
+git clone https://github.com/AlaiY95/gengar.git
 
 Install dependencies:
-Copycargo build
+cargo build
 
 Run the project:
-Copycargo run
+cargo run
 
 
 Configuration
